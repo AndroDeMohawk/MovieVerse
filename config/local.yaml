@@ -1,0 +1,26 @@
+env: "local" # local, dev, prod
+
+grpc:
+  port: 45045
+  timeout: 5s
+
+postgres:
+  host: "localhost"
+  port: 1291
+  user: "postgres"
+  password: "postgres"
+  dbname: "movie_db"
+  sslmode: "disable"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  comments_topic: "movie-comments"
+
+auth_service:
+  address: "localhost:44044"
