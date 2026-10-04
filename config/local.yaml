@@ -24,3 +24,5 @@ kafka:
 
 auth_service:
   address: "localhost:44044"
+  app_id: 45045
+  app_secret: "dd20e5ec-4ec9-4f82-8dac-787482f90670"

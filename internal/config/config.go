@@ -43,7 +43,9 @@ type KafkaConfig struct {
 }
 
 type AuthServiceConfig struct {
-	Address string `yaml:"address" env-required:"true"`
+	Address   string `yaml:"address" env-required:"true"`
+	AppID     int32  `yaml:"app_id" env-required:"true"`
+	AppSecret string `yaml:"app_secret" env-required:"true"`
 }
 
 func MustLoad() *Config {
