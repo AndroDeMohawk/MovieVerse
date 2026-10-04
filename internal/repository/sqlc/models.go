@@ -5,15 +5,17 @@
 package db
 
 import (
+	"time"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Comment struct {
 	ID        int64
-	MovieID   pgtype.Int8
-	ProfileID pgtype.Int8
+	MovieID   int64
+	ProfileID int64
 	Content   string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type Genre struct {
@@ -24,15 +26,15 @@ type Genre struct {
 type Movie struct {
 	ID              int64
 	Title           string
-	OriginalTitle   pgtype.Text
-	Description     pgtype.Text
-	Director        pgtype.Text
+	OriginalTitle   *string
+	Description     *string
+	Director        *string
 	ReleaseDate     pgtype.Date
-	DurationMinutes pgtype.Int4
-	PosterUrl       pgtype.Text
+	DurationMinutes *int32
+	PosterUrl       *string
 	AverageRating   pgtype.Numeric
-	ViewsCount      pgtype.Int8
-	CreatedAt       pgtype.Timestamptz
+	ViewsCount      int64
+	CreatedAt       time.Time
 }
 
 type MovieGenre struct {
@@ -44,15 +46,15 @@ type Profile struct {
 	ID         int64
 	AuthUserID int64
 	Username   string
-	AvatarUrl  pgtype.Text
-	Bio        pgtype.Text
-	CreatedAt  pgtype.Timestamptz
+	AvatarUrl  *string
+	Bio        *string
+	CreatedAt  time.Time
 }
 
 type Rating struct {
 	ID        int64
-	MovieID   pgtype.Int8
-	ProfileID pgtype.Int8
+	MovieID   int64
+	ProfileID int64
 	Score     int16
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }

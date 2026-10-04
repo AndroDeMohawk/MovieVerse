@@ -4,7 +4,7 @@ CREATE TABLE profiles (
                           username VARCHAR(100) UNIQUE NOT NULL,
                           avatar_url VARCHAR(255),
                           bio TEXT,
-                          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE movies (
@@ -16,9 +16,9 @@ CREATE TABLE movies (
                         release_date DATE,
                         duration_minutes INT,
                         poster_url VARCHAR(255),
-                        average_rating DECIMAL(3, 2) DEFAULT 0.00,
-                        views_count BIGINT DEFAULT 0,
-                        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                        average_rating DECIMAL(3, 2) NOT NULL DEFAULT 0.00,
+                        views_count BIGINT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE genres (
@@ -27,24 +27,24 @@ CREATE TABLE genres (
 );
 
 CREATE TABLE movie_genres (
-                              movie_id BIGINT REFERENCES movies(id) ON DELETE CASCADE,
-                              genre_id INT REFERENCES genres(id) ON DELETE CASCADE,
+                              movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+                              genre_id INT NOT NULL REFERENCES genres(id) ON DELETE CASCADE,
                               PRIMARY KEY (movie_id, genre_id)
 );
 
 CREATE TABLE ratings (
                          id BIGSERIAL PRIMARY KEY,
-                         movie_id BIGINT REFERENCES movies(id) ON DELETE CASCADE,
-                         profile_id BIGINT REFERENCES profiles(id) ON DELETE CASCADE,
+                         movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+                         profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
                          score SMALLINT NOT NULL CHECK (score >= 1 AND score <= 10),
-                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                          UNIQUE(movie_id, profile_id)
 );
 
 CREATE TABLE comments (
                           id BIGSERIAL PRIMARY KEY,
-                          movie_id BIGINT REFERENCES movies(id) ON DELETE CASCADE,
-                          profile_id BIGINT REFERENCES profiles(id) ON DELETE CASCADE,
+                          movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+                          profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
                           content TEXT NOT NULL,
-                          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

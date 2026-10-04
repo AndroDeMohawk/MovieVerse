@@ -7,21 +7,20 @@ import (
 
 	db "github.com/AndroDeMohawk/MovieVerse/internal/repository/sqlc"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var ErrProfileNotFound = errors.New("profile not found")
 
-type ProfileUsecase struct {
+type Profile struct {
 	q *db.Queries
 }
 
-func NewProfileUsecase(q *db.Queries) *ProfileUsecase {
-	return &ProfileUsecase{q: q}
+func NewProfile(q *db.Queries) *Profile {
+	return &Profile{q: q}
 }
 
-func (u *ProfileUsecase) GetProfileByAuthID(ctx context.Context, authUserID int64) (db.Profile, error) {
-	const op = "ProfileUsecase.GetProfileByAuthID"
+func (u *Profile) GetProfileByAuthID(ctx context.Context, authUserID int64) (db.Profile, error) {
+	const op = "usecase.profile.GetProfileByAuthID"
 
 	profile, err := u.q.GetProfileByAuthID(ctx, authUserID)
 	if err != nil {
@@ -34,14 +33,14 @@ func (u *ProfileUsecase) GetProfileByAuthID(ctx context.Context, authUserID int6
 	return profile, nil
 }
 
-func (u *ProfileUsecase) CreateProfile(ctx context.Context, authUserID int64, username string, avatarURL, bio pgtype.Text) (db.Profile, error) {
-	const op = "ProfileUsecase.CreateProfile"
+func (u *Profile) CreateProfile(ctx context.Context, authUserID int64, username, avatarURL, bio string) (db.Profile, error) {
+	const op = "usecase.profile.CreateProfile"
 
 	profile, err := u.q.CreateProfile(ctx, db.CreateProfileParams{
 		AuthUserID: authUserID,
 		Username:   username,
-		AvatarUrl:  avatarURL,
-		Bio:        bio,
+		AvatarUrl:  &avatarURL,
+		Bio:        &bio,
 	})
 	if err != nil {
 		return db.Profile{}, fmt.Errorf("%s: %w", op, err)
@@ -51,13 +50,13 @@ func (u *ProfileUsecase) CreateProfile(ctx context.Context, authUserID int64, us
 }
 
 type UpdateProfileInput struct {
-	Username  pgtype.Text
-	AvatarURL pgtype.Text
-	Bio       pgtype.Text
+	Username  *string
+	AvatarURL *string
+	Bio       *string
 }
 
-func (u *ProfileUsecase) UpdateProfile(ctx context.Context, authUserID int64, input UpdateProfileInput) (db.Profile, error) {
-	const op = "ProfileUsecase.UpdateProfile"
+func (u *Profile) UpdateProfile(ctx context.Context, authUserID int64, input UpdateProfileInput) (db.Profile, error) {
+	const op = "usecase.profile.UpdateProfile"
 
 	profile, err := u.q.UpdateProfile(ctx, db.UpdateProfileParams{
 		AuthUserID: authUserID,

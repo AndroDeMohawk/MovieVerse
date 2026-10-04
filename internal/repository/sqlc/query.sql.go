@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -35,8 +36,8 @@ RETURNING id, movie_id, profile_id, content, created_at
 `
 
 type CreateCommentParams struct {
-	MovieID   pgtype.Int8
-	ProfileID pgtype.Int8
+	MovieID   int64
+	ProfileID int64
 	Content   string
 }
 
@@ -57,19 +58,34 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 }
 
 const createMovie = `-- name: CreateMovie :one
-INSERT INTO movies (title, original_title, description, director, release_date, duration_minutes, poster_url)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO movies (
+    title,
+    original_title,
+    description,
+    director,
+    release_date,
+    duration_minutes,
+    poster_url
+) VALUES (
+             $1,
+             $2,
+             $3,
+             $4,
+             $5::date,
+             $6,
+             $7
+         )
 RETURNING id
 `
 
 type CreateMovieParams struct {
 	Title           string
-	OriginalTitle   pgtype.Text
-	Description     pgtype.Text
-	Director        pgtype.Text
+	OriginalTitle   *string
+	Description     *string
+	Director        *string
 	ReleaseDate     pgtype.Date
-	DurationMinutes pgtype.Int4
-	PosterUrl       pgtype.Text
+	DurationMinutes *int32
+	PosterUrl       *string
 }
 
 func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (int64, error) {
@@ -90,15 +106,20 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (int64
 const createProfile = `-- name: CreateProfile :one
 
 INSERT INTO profiles (auth_user_id, username, avatar_url, bio)
-VALUES ($1, $2, $3, $4)
+VALUES (
+           $1,
+           $2,
+           $3,
+           $4
+       )
 RETURNING id, auth_user_id, username, avatar_url, bio, created_at
 `
 
 type CreateProfileParams struct {
 	AuthUserID int64
 	Username   string
-	AvatarUrl  pgtype.Text
-	Bio        pgtype.Text
+	AvatarUrl  *string
+	Bio        *string
 }
 
 // ============================================================================
@@ -126,9 +147,17 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 const getMovieByID = `-- name: GetMovieByID :one
 
 SELECT
-    m.id, m.title, m.original_title, m.description, m.director,
-    m.release_date, m.duration_minutes, m.poster_url, m.average_rating,
-    m.views_count, m.created_at,
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
     COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
 FROM movies m
          LEFT JOIN movie_genres mg ON m.id = mg.movie_id
@@ -140,15 +169,15 @@ GROUP BY m.id
 type GetMovieByIDRow struct {
 	ID              int64
 	Title           string
-	OriginalTitle   pgtype.Text
-	Description     pgtype.Text
-	Director        pgtype.Text
+	OriginalTitle   *string
+	Description     *string
+	Director        *string
 	ReleaseDate     pgtype.Date
-	DurationMinutes pgtype.Int4
-	PosterUrl       pgtype.Text
-	AverageRating   pgtype.Numeric
-	ViewsCount      pgtype.Int8
-	CreatedAt       pgtype.Timestamptz
+	DurationMinutes *int32
+	PosterUrl       *string
+	AverageRating   float64
+	ViewsCount      int64
+	CreatedAt       time.Time
 	Genres          []string
 }
 
@@ -178,7 +207,8 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (GetMovieByIDRow, 
 const getProfileByAuthID = `-- name: GetProfileByAuthID :one
 SELECT id, auth_user_id, username, avatar_url, bio, created_at
 FROM profiles
-WHERE auth_user_id = $1 LIMIT 1
+WHERE auth_user_id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetProfileByAuthID(ctx context.Context, authUserID int64) (Profile, error) {
@@ -208,33 +238,38 @@ func (q *Queries) IncrementMovieViews(ctx context.Context, id int64) error {
 
 const listCommentsByMovieID = `-- name: ListCommentsByMovieID :many
 SELECT
-    c.id, c.movie_id, c.profile_id, c.content, c.created_at,
-    p.username, p.avatar_url
+    c.id,
+    c.movie_id,
+    c.profile_id,
+    c.content,
+    c.created_at,
+    p.username,
+    p.avatar_url
 FROM comments c
          JOIN profiles p ON c.profile_id = p.id
 WHERE c.movie_id = $1
 ORDER BY c.created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $3 OFFSET $2
 `
 
 type ListCommentsByMovieIDParams struct {
-	MovieID pgtype.Int8
-	Limit   int32
+	MovieID int64
 	Offset  int32
+	Limit   int32
 }
 
 type ListCommentsByMovieIDRow struct {
 	ID        int64
-	MovieID   pgtype.Int8
-	ProfileID pgtype.Int8
+	MovieID   int64
+	ProfileID int64
 	Content   string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	Username  string
-	AvatarUrl pgtype.Text
+	AvatarUrl *string
 }
 
 func (q *Queries) ListCommentsByMovieID(ctx context.Context, arg ListCommentsByMovieIDParams) ([]ListCommentsByMovieIDRow, error) {
-	rows, err := q.db.Query(ctx, listCommentsByMovieID, arg.MovieID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listCommentsByMovieID, arg.MovieID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -263,9 +298,17 @@ func (q *Queries) ListCommentsByMovieID(ctx context.Context, arg ListCommentsByM
 
 const listMovies = `-- name: ListMovies :many
 SELECT
-    m.id, m.title, m.original_title, m.description, m.director,
-    m.release_date, m.duration_minutes, m.poster_url, m.average_rating,
-    m.views_count, m.created_at,
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
     COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
 FROM movies m
          LEFT JOIN movie_genres mg ON m.id = mg.movie_id
@@ -273,32 +316,32 @@ FROM movies m
 WHERE ($1::INT IS NULL OR mg.genre_id = $1)
 GROUP BY m.id
 ORDER BY m.created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $3 OFFSET $2
 `
 
 type ListMoviesParams struct {
-	Column1 int32
-	Limit   int32
+	GenreID *int32
 	Offset  int32
+	Limit   int32
 }
 
 type ListMoviesRow struct {
 	ID              int64
 	Title           string
-	OriginalTitle   pgtype.Text
-	Description     pgtype.Text
-	Director        pgtype.Text
+	OriginalTitle   *string
+	Description     *string
+	Director        *string
 	ReleaseDate     pgtype.Date
-	DurationMinutes pgtype.Int4
-	PosterUrl       pgtype.Text
-	AverageRating   pgtype.Numeric
-	ViewsCount      pgtype.Int8
-	CreatedAt       pgtype.Timestamptz
+	DurationMinutes *int32
+	PosterUrl       *string
+	AverageRating   float64
+	ViewsCount      int64
+	CreatedAt       time.Time
 	Genres          []string
 }
 
 func (q *Queries) ListMovies(ctx context.Context, arg ListMoviesParams) ([]ListMoviesRow, error) {
-	rows, err := q.db.Query(ctx, listMovies, arg.Column1, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listMovies, arg.GenreID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +383,7 @@ SET average_rating = (
 WHERE id = $1
 `
 
-func (q *Queries) UpdateMovieRating(ctx context.Context, movieID pgtype.Int8) error {
+func (q *Queries) UpdateMovieRating(ctx context.Context, movieID int64) error {
 	_, err := q.db.Exec(ctx, updateMovieRating, movieID)
 	return err
 }
@@ -356,9 +399,9 @@ RETURNING id, auth_user_id, username, avatar_url, bio, created_at
 `
 
 type UpdateProfileParams struct {
-	Username   pgtype.Text
-	AvatarUrl  pgtype.Text
-	Bio        pgtype.Text
+	Username   *string
+	AvatarUrl  *string
+	Bio        *string
 	AuthUserID int64
 }
 
@@ -390,8 +433,8 @@ ON CONFLICT (movie_id, profile_id)
 `
 
 type UpsertRatingParams struct {
-	MovieID   pgtype.Int8
-	ProfileID pgtype.Int8
+	MovieID   int64
+	ProfileID int64
 	Score     int16
 }
 

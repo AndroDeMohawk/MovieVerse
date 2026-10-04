@@ -13,8 +13,10 @@ import (
 	"github.com/AndroDeMohawk/MovieVerse/internal/client/auth"
 	"github.com/AndroDeMohawk/MovieVerse/internal/config"
 	"github.com/AndroDeMohawk/MovieVerse/internal/repository/postgres"
+	db "github.com/AndroDeMohawk/MovieVerse/internal/repository/sqlc"
 	"github.com/AndroDeMohawk/MovieVerse/internal/transport/grpc/interceptor"
 	moviegrpc "github.com/AndroDeMohawk/MovieVerse/internal/transport/grpc/movie"
+	"github.com/AndroDeMohawk/MovieVerse/internal/usecase"
 
 	"google.golang.org/grpc"
 )
@@ -41,7 +43,7 @@ func main() {
 	}
 	defer dbPool.Close()
 	log.Info("connected to postgresql successfully")
-
+	queries := db.New(dbPool)
 	//Подключение gRPC-клиента к SSO сервису
 	authClient, err := auth.New(ctx, cfg.AuthService.Address, cfg.AuthService.AppID, log)
 	if err != nil {
@@ -57,8 +59,10 @@ func main() {
 			interceptor.AuthUnaryInterceptor(cfg.AuthService.AppSecret, cfg.AuthService.AppID),
 		),
 	)
-
-	moviegrpc.Register(gRPCServer)
+	movieUsecase := usecase.NewMovie(queries, dbPool, authClient, log)
+	//profileUsecase := usecase.NewProfile(queries)
+	//commentUsecase := usecase.NewComment(queries)
+	moviegrpc.Register(gRPCServer, movieUsecase)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GRPC.Port))
 	if err != nil {

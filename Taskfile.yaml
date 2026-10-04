@@ -1,7 +1,23 @@
 version: '3'
 
+dotenv: ['.env']
+
+
 tasks:
+  run:
+    desc: "Запустить приложение"
+    cmds:
+      - go run cmd/app/main.go --config=config/local.yaml
   sqlc:
     desc: "Генерация Go-кода из SQL файлов"
     cmds:
       - sqlc generate
+  migrate-up:
+    desc: Накатить все миграции
+    cmds:
+      - docker run --rm --network host -v "{{.TASKFILE_DIR}}/migrations":/migrations migrate/migrate -path=/migrations/ -database "{{.DB_URL}}" up
+
+  migrate-down:
+    desc: Откатить последнюю миграцию
+    cmds:
+      - docker run --rm --network host -v "{{.TASKFILE_DIR}}/migrations":/migrations migrate/migrate -path=/migrations/ -database "{{.DB_URL}}" down 1

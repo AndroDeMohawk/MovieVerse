@@ -4,13 +4,19 @@
 
 -- name: CreateProfile :one
 INSERT INTO profiles (auth_user_id, username, avatar_url, bio)
-VALUES ($1, $2, $3, $4)
+VALUES (
+           sqlc.arg('auth_user_id'),
+           sqlc.arg('username'),
+           sqlc.narg('avatar_url'),
+           sqlc.narg('bio')
+       )
 RETURNING id, auth_user_id, username, avatar_url, bio, created_at;
 
 -- name: GetProfileByAuthID :one
 SELECT id, auth_user_id, username, avatar_url, bio, created_at
 FROM profiles
-WHERE auth_user_id = $1 LIMIT 1;
+WHERE auth_user_id = sqlc.arg('auth_user_id')
+LIMIT 1;
 
 -- name: UpdateProfile :one
 UPDATE profiles
@@ -27,53 +33,84 @@ RETURNING id, auth_user_id, username, avatar_url, bio, created_at;
 
 -- name: GetMovieByID :one
 SELECT
-    m.id, m.title, m.original_title, m.description, m.director,
-    m.release_date, m.duration_minutes, m.poster_url, m.average_rating,
-    m.views_count, m.created_at,
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
     COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
 FROM movies m
          LEFT JOIN movie_genres mg ON m.id = mg.movie_id
          LEFT JOIN genres g ON mg.genre_id = g.id
-WHERE m.id = $1
+WHERE m.id = sqlc.arg('id')
 GROUP BY m.id;
 
 -- name: ListMovies :many
 SELECT
-    m.id, m.title, m.original_title, m.description, m.director,
-    m.release_date, m.duration_minutes, m.poster_url, m.average_rating,
-    m.views_count, m.created_at,
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
     COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
 FROM movies m
          LEFT JOIN movie_genres mg ON m.id = mg.movie_id
          LEFT JOIN genres g ON mg.genre_id = g.id
-WHERE ($1::INT IS NULL OR mg.genre_id = $1)
+WHERE (sqlc.narg('genre_id')::INT IS NULL OR mg.genre_id = sqlc.narg('genre_id'))
 GROUP BY m.id
 ORDER BY m.created_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CreateMovie :one
-INSERT INTO movies (title, original_title, description, director, release_date, duration_minutes, poster_url)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO movies (
+    title,
+    original_title,
+    description,
+    director,
+    release_date,
+    duration_minutes,
+    poster_url
+) VALUES (
+             sqlc.arg('title'),
+             sqlc.narg('original_title'),
+             sqlc.narg('description'),
+             sqlc.narg('director'),
+             sqlc.narg('release_date')::date,
+             sqlc.narg('duration_minutes'),
+             sqlc.narg('poster_url')
+         )
 RETURNING id;
 
 -- name: AddGenreToMovie :exec
 INSERT INTO movie_genres (movie_id, genre_id)
-VALUES ($1, $2)
+VALUES (sqlc.arg('movie_id'), sqlc.arg('genre_id'))
 ON CONFLICT DO NOTHING;
 
 -- name: IncrementMovieViews :exec
 UPDATE movies
 SET views_count = views_count + 1
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
 
 -- name: UpdateMovieRating :exec
 UPDATE movies
 SET average_rating = (
     SELECT COALESCE(AVG(score), 0.0)
     FROM ratings
-    WHERE movie_id = $1
+    WHERE movie_id = sqlc.arg('movie_id')
 )
-WHERE id = $1;
+WHERE id = sqlc.arg('movie_id');
 
 -- ============================================================================
 -- RATINGS
@@ -81,7 +118,7 @@ WHERE id = $1;
 
 -- name: UpsertRating :exec
 INSERT INTO ratings (movie_id, profile_id, score)
-VALUES ($1, $2, $3)
+VALUES (sqlc.arg('movie_id'), sqlc.arg('profile_id'), sqlc.arg('score'))
 ON CONFLICT (movie_id, profile_id)
     DO UPDATE SET score = EXCLUDED.score, created_at = CURRENT_TIMESTAMP;
 
@@ -91,15 +128,20 @@ ON CONFLICT (movie_id, profile_id)
 
 -- name: CreateComment :one
 INSERT INTO comments (movie_id, profile_id, content)
-VALUES ($1, $2, $3)
+VALUES (sqlc.arg('movie_id'), sqlc.arg('profile_id'), sqlc.arg('content'))
 RETURNING id, movie_id, profile_id, content, created_at;
 
 -- name: ListCommentsByMovieID :many
 SELECT
-    c.id, c.movie_id, c.profile_id, c.content, c.created_at,
-    p.username, p.avatar_url
+    c.id,
+    c.movie_id,
+    c.profile_id,
+    c.content,
+    c.created_at,
+    p.username,
+    p.avatar_url
 FROM comments c
          JOIN profiles p ON c.profile_id = p.id
-WHERE c.movie_id = $1
+WHERE c.movie_id = sqlc.arg('movie_id')
 ORDER BY c.created_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');

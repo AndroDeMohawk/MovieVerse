@@ -3,7 +3,7 @@ module github.com/AndroDeMohawk/MovieVerse
 go 1.27.1
 
 require (
-	github.com/AndroDeMohawk/movie-proto v0.0.0-20261003151341-6a00c7b2b6ac
+	github.com/AndroDeMohawk/movie-proto v0.0.3
 	github.com/AndroDeMohawk/protos v0.0.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0

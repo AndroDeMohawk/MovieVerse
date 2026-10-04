@@ -5,19 +5,18 @@ import (
 	"fmt"
 
 	db "github.com/AndroDeMohawk/MovieVerse/internal/repository/sqlc"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type CommentUsecase struct {
+type Comment struct {
 	q *db.Queries
 }
 
-func NewCommentUsecase(q *db.Queries) *CommentUsecase {
-	return &CommentUsecase{q: q}
+func NewComment(q *db.Queries) *Comment {
+	return &Comment{q: q}
 }
 
-func (u *CommentUsecase) CreateComment(ctx context.Context, movieID, profileID pgtype.Int8, content string) (db.Comment, error) {
-	const op = "CommentUsecase.CreateComment"
+func (u *Comment) CreateComment(ctx context.Context, movieID, profileID int64, content string) (db.Comment, error) {
+	const op = "usecase.comment.CreateComment"
 
 	comment, err := u.q.CreateComment(ctx, db.CreateCommentParams{
 		MovieID:   movieID,
@@ -31,8 +30,8 @@ func (u *CommentUsecase) CreateComment(ctx context.Context, movieID, profileID p
 	return comment, nil
 }
 
-func (u *CommentUsecase) ListComments(ctx context.Context, movieID pgtype.Int8, page, limit int32) ([]db.ListCommentsByMovieIDRow, error) {
-	const op = "CommentUsecase.ListComments"
+func (u *Comment) ListComments(ctx context.Context, movieID int64, page, limit int32) ([]db.ListCommentsByMovieIDRow, error) {
+	const op = "usecase.comment.ListComments"
 
 	if page < 1 {
 		page = 1
