@@ -32,7 +32,7 @@ func (u *CommentUsecase) CreateComment(ctx context.Context, movieID, profileID p
 }
 
 func (u *CommentUsecase) ListComments(ctx context.Context, movieID pgtype.Int8, page, limit int32) ([]db.ListCommentsByMovieIDRow, error) {
-	const op = "usecase.CommentUsecase.ListComments"
+	const op = "CommentUsecase.ListComments"
 
 	if page < 1 {
 		page = 1

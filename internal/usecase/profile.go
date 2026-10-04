@@ -21,7 +21,7 @@ func NewProfileUsecase(q *db.Queries) *ProfileUsecase {
 }
 
 func (u *ProfileUsecase) GetProfileByAuthID(ctx context.Context, authUserID int64) (db.Profile, error) {
-	const op = "usecase.ProfileUsecase.GetProfileByAuthID"
+	const op = "ProfileUsecase.GetProfileByAuthID"
 
 	profile, err := u.q.GetProfileByAuthID(ctx, authUserID)
 	if err != nil {
@@ -35,7 +35,7 @@ func (u *ProfileUsecase) GetProfileByAuthID(ctx context.Context, authUserID int6
 }
 
 func (u *ProfileUsecase) CreateProfile(ctx context.Context, authUserID int64, username string, avatarURL, bio pgtype.Text) (db.Profile, error) {
-	const op = "usecase.ProfileUsecase.CreateProfile"
+	const op = "ProfileUsecase.CreateProfile"
 
 	profile, err := u.q.CreateProfile(ctx, db.CreateProfileParams{
 		AuthUserID: authUserID,
