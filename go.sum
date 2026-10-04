@@ -1,3 +1,5 @@
+github.com/AndroDeMohawk/movie-proto v0.0.0-20261003151341-6a00c7b2b6ac h1:Wd5ucuPU07Erw/bduAoJNJmJKY9cnBhN4trMywb15oA=
+github.com/AndroDeMohawk/movie-proto v0.0.0-20261003151341-6a00c7b2b6ac/go.mod h1:Y4gd7bBv1WBmIrZ5rYyxFF8bT3AKyi93L6nS9Qct1+k=
 github.com/AndroDeMohawk/protos v0.0.2 h1:3lKJs/Yf28VoM87MWNrdG5ZkzSJUtyX3tEMRSUWCYNw=
 github.com/AndroDeMohawk/protos v0.0.2/go.mod h1:h1Mu2JVuhs/JwFRvkIAqdoxTtciGqbK3KOceM5Qkx7Q=
 github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak=
