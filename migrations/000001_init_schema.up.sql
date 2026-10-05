@@ -1,4 +1,4 @@
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
                           id BIGSERIAL PRIMARY KEY,
                           auth_user_id BIGINT UNIQUE NOT NULL,
                           username VARCHAR(100) UNIQUE NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE profiles (
                           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE movies (
+CREATE TABLE IF NOT EXISTS movies (
                         id BIGSERIAL PRIMARY KEY,
                         title VARCHAR(255) NOT NULL,
                         original_title VARCHAR(255),
@@ -21,18 +21,18 @@ CREATE TABLE movies (
                         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE genres (
+CREATE TABLE IF NOT EXISTS genres (
                         id SERIAL PRIMARY KEY,
                         name VARCHAR(50) UNIQUE NOT NULL
 );
 
-CREATE TABLE movie_genres (
+CREATE TABLE IF NOT EXISTS movie_genres (
                               movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
                               genre_id INT NOT NULL REFERENCES genres(id) ON DELETE CASCADE,
                               PRIMARY KEY (movie_id, genre_id)
 );
 
-CREATE TABLE ratings (
+CREATE TABLE IF NOT EXISTS ratings (
                          id BIGSERIAL PRIMARY KEY,
                          movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
                          profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -41,10 +41,18 @@ CREATE TABLE ratings (
                          UNIQUE(movie_id, profile_id)
 );
 
-CREATE TABLE comments (
+CREATE TABLE IF NOT EXISTS comments (
                           id BIGSERIAL PRIMARY KEY,
                           movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
                           profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
                           content TEXT NOT NULL,
                           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS user_favorites (
+                                              user_id BIGINT NOT NULL,
+                                              movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+                                              created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                              PRIMARY KEY (user_id, movie_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_favorites_user_created
+    ON user_favorites (user_id, created_at DESC);
