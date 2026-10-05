@@ -2,9 +2,12 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/AndroDeMohawk/MovieVerse/internal/client/auth"
@@ -12,7 +15,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
+
+const movieCacheTTL = 15 * time.Minute
+const pendingKey = "movie:views:pending"
 
 var (
 	ErrPermissionDenied = errors.New("permission denied: admin role required")
@@ -33,14 +40,16 @@ type CreateMovieInput struct {
 type Movie struct {
 	q          *db.Queries
 	pool       *pgxpool.Pool
+	rdb        *redis.Client
 	authClient *auth.Client
 	log        *slog.Logger
 }
 
-func NewMovie(q *db.Queries, pool *pgxpool.Pool, authClient *auth.Client, log *slog.Logger) *Movie {
+func NewMovie(q *db.Queries, pool *pgxpool.Pool, rdb *redis.Client, authClient *auth.Client, log *slog.Logger) *Movie {
 	return &Movie{
 		q:          q,
 		pool:       pool,
+		rdb:        rdb,
 		authClient: authClient,
 		log:        log,
 	}
@@ -100,7 +109,24 @@ func (u *Movie) CreateMovie(ctx context.Context, userID int64, input CreateMovie
 
 func (u *Movie) GetMovie(ctx context.Context, id int64) (db.GetMovieByIDRow, error) {
 	const op = "usecase.movie.GetMovie"
+	cacheKey := fmt.Sprintf("movie:%d", id)
 
+	// 1. Пробуем получить из Redis (Cache Hit)
+	cachedBytes, err := u.rdb.Get(ctx, cacheKey).Bytes()
+	if err == nil {
+		var movie db.GetMovieByIDRow
+		if err := json.Unmarshal(cachedBytes, &movie); err == nil {
+			u.log.Debug("cache hit", slog.Int64("movie_id", id))
+
+			// Асинхронно инкрементируем просмотры
+			u.incrementViews(id)
+
+			return movie, nil
+		}
+	} else if !errors.Is(err, redis.Nil) {
+		// Ошибка Redis (например, таймаут соединения) — логируем и идем в БД
+		u.log.Warn("redis get error, falling back to postgres", slog.Any("error", err))
+	}
 	movie, err := u.q.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -109,12 +135,29 @@ func (u *Movie) GetMovie(ctx context.Context, id int64) (db.GetMovieByIDRow, err
 		return db.GetMovieByIDRow{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	// Асинхронно инкрементируем счетчик просмотров
-	go func(mID int64) {
-		_ = u.q.IncrementMovieViews(context.Background(), mID)
-	}(id)
+	bytes, err := json.Marshal(movie)
+	if err == nil {
+		if setErr := u.rdb.Set(ctx, cacheKey, bytes, movieCacheTTL).Err(); setErr != nil {
+			u.log.Warn("failed to set movie cache", slog.Any("error", setErr))
+		}
+	}
+
+	// Асинхронно инкрементируем просмотры
+	go u.incrementViews(id)
 
 	return movie, nil
+}
+func (u *Movie) incrementViews(movieID int64) {
+	ctx := context.Background()
+	viewsKey := fmt.Sprintf("movie:views:%d", movieID)
+
+	pipe := u.rdb.Pipeline()
+	pipe.Incr(ctx, viewsKey)
+	pipe.SAdd(ctx, pendingKey, movieID)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		u.log.Warn("failed to increment views in redis", slog.Int64("movie_id", movieID), slog.Any("error", err))
+	}
 }
 
 func (u *Movie) ListMovies(ctx context.Context, genreID *int32, page, limit int32) ([]db.ListMoviesRow, error) {
@@ -139,4 +182,113 @@ func (u *Movie) ListMovies(ctx context.Context, genreID *int32, page, limit int3
 	}
 
 	return movies, nil
+}
+
+func (u *Movie) StartViewsSync(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			u.flushViewsToDB(ctx)
+		case <-ctx.Done():
+			u.log.Info("stopping views sync, executing final flush")
+			u.flushViewsToDB(context.Background())
+			return
+		}
+	}
+}
+
+func (u *Movie) flushViewsToDB(ctx context.Context) {
+	movieIDs, err := u.rdb.SMembers(ctx, pendingKey).Result()
+	if err != nil {
+		u.log.Error("failed to get pending movie IDs from redis", slog.Any("error", err))
+		return
+	}
+	if len(movieIDs) == 0 {
+		return
+	}
+
+	const numWorkers = 10
+	jobs := make(chan string, len(movieIDs))
+	var wg sync.WaitGroup
+
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idStr := range jobs {
+				u.workerFlushMovieViews(ctx, idStr)
+			}
+		}()
+	}
+
+	for _, idStr := range movieIDs {
+		jobs <- idStr
+	}
+	close(jobs)
+
+	wg.Wait()
+	u.log.Debug("flushed movie views to database", slog.Int("count", len(movieIDs)))
+}
+
+func (u *Movie) workerFlushMovieViews(ctx context.Context, idStr string) {
+	movieID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		u.rdb.SRem(ctx, pendingKey, idStr)
+		return
+	}
+
+	viewsKey := fmt.Sprintf("movie:views:%d", movieID)
+
+	delta, err := u.rdb.GetDel(ctx, viewsKey).Int64()
+	if err != nil {
+		if err == redis.Nil {
+
+			u.rdb.SRem(ctx, pendingKey, idStr)
+			return
+		}
+		u.log.Error("failed to get views from redis", slog.Int64("movie_id", movieID), slog.Any("error", err))
+		return
+	}
+
+	if delta <= 0 {
+		u.rdb.SRem(ctx, pendingKey, idStr)
+		return
+	}
+
+	if err := u.rdb.SRem(ctx, pendingKey, idStr).Err(); err != nil {
+		u.log.Error("failed to remove from pending", slog.Int64("movie_id", movieID), slog.Any("error", err))
+
+	}
+
+	err = u.q.IncrementMovieViewsBy(ctx, db.IncrementMovieViewsByParams{
+		ID:         movieID,
+		ViewsCount: delta,
+	})
+	if err != nil {
+		u.log.Error("failed to flush views to postgres, rolling back to redis",
+			slog.Int64("movie_id", movieID),
+			slog.Int64("delta", delta),
+			slog.Any("error", err),
+		)
+		rbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rbPipe := u.rdb.Pipeline()
+		rbPipe.IncrBy(rbCtx, viewsKey, delta)
+		rbPipe.SAdd(rbCtx, pendingKey, idStr)
+		if _, execErr := rbPipe.Exec(rbCtx); execErr != nil {
+			u.log.Error("CRITICAL: failed to rollback views to redis",
+				slog.Int64("movie_id", movieID),
+				slog.Int64("delta", delta),
+				slog.Any("error", execErr),
+			)
+		}
+		return
+	}
+
+	if err := u.rdb.Del(ctx, fmt.Sprintf("movie:%d", movieID)).Err(); err != nil {
+		u.log.Error("failed to invalidate movie cache", slog.Int64("movie_id", movieID), slog.Any("error", err))
+	}
 }
