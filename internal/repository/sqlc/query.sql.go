@@ -12,6 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addFavorite = `-- name: AddFavorite :exec
+INSERT INTO user_favorites (user_id, movie_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, movie_id) DO NOTHING
+`
+
+type AddFavoriteParams struct {
+	UserID  int64
+	MovieID int64
+}
+
+func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
+	_, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.MovieID)
+	return err
+}
+
 const addGenreToMovie = `-- name: AddGenreToMovie :exec
 INSERT INTO movie_genres (movie_id, genre_id)
 VALUES ($1, $2)
@@ -236,6 +252,42 @@ func (q *Queries) IncrementMovieViews(ctx context.Context, id int64) error {
 	return err
 }
 
+const incrementMovieViewsBy = `-- name: IncrementMovieViewsBy :exec
+UPDATE movies
+SET views_count = views_count + $2
+WHERE id = $1
+`
+
+type IncrementMovieViewsByParams struct {
+	ID         int64
+	ViewsCount int64
+}
+
+func (q *Queries) IncrementMovieViewsBy(ctx context.Context, arg IncrementMovieViewsByParams) error {
+	_, err := q.db.Exec(ctx, incrementMovieViewsBy, arg.ID, arg.ViewsCount)
+	return err
+}
+
+const isFavorite = `-- name: IsFavorite :one
+SELECT EXISTS (
+    SELECT 1
+    FROM user_favorites
+    WHERE user_id = $1 AND movie_id = $2
+)
+`
+
+type IsFavoriteParams struct {
+	UserID  int64
+	MovieID int64
+}
+
+func (q *Queries) IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isFavorite, arg.UserID, arg.MovieID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listCommentsByMovieID = `-- name: ListCommentsByMovieID :many
 SELECT
     c.id,
@@ -285,6 +337,75 @@ func (q *Queries) ListCommentsByMovieID(ctx context.Context, arg ListCommentsByM
 			&i.CreatedAt,
 			&i.Username,
 			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFavorites = `-- name: ListFavorites :many
+SELECT
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating,
+    m.views_count,
+    uf.created_at AS added_at
+FROM user_favorites uf
+         JOIN movies m ON m.id = uf.movie_id
+WHERE uf.user_id = $1
+ORDER BY uf.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListFavoritesParams struct {
+	UserID int64
+	Limit  int32
+	Offset int32
+}
+
+type ListFavoritesRow struct {
+	ID              int64
+	Title           string
+	OriginalTitle   *string
+	Description     *string
+	ReleaseDate     pgtype.Date
+	DurationMinutes *int32
+	PosterUrl       *string
+	AverageRating   pgtype.Numeric
+	ViewsCount      int64
+	AddedAt         time.Time
+}
+
+func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([]ListFavoritesRow, error) {
+	rows, err := q.db.Query(ctx, listFavorites, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFavoritesRow
+	for rows.Next() {
+		var i ListFavoritesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.OriginalTitle,
+			&i.Description,
+			&i.ReleaseDate,
+			&i.DurationMinutes,
+			&i.PosterUrl,
+			&i.AverageRating,
+			&i.ViewsCount,
+			&i.AddedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -371,6 +492,21 @@ func (q *Queries) ListMovies(ctx context.Context, arg ListMoviesParams) ([]ListM
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeFavorite = `-- name: RemoveFavorite :exec
+DELETE FROM user_favorites
+WHERE user_id = $1 AND movie_id = $2
+`
+
+type RemoveFavoriteParams struct {
+	UserID  int64
+	MovieID int64
+}
+
+func (q *Queries) RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error {
+	_, err := q.db.Exec(ctx, removeFavorite, arg.UserID, arg.MovieID)
+	return err
 }
 
 const updateMovieRating = `-- name: UpdateMovieRating :exec

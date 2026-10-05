@@ -58,3 +58,9 @@ type Rating struct {
 	Score     int16
 	CreatedAt time.Time
 }
+
+type UserFavorite struct {
+	UserID    int64
+	MovieID   int64
+	CreatedAt time.Time
+}
