@@ -13,9 +13,10 @@ import (
 type Comment struct {
 	ID        int64
 	MovieID   int64
-	ProfileID int64
-	Content   string
+	UserID    int64
+	Text      string
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Genre struct {

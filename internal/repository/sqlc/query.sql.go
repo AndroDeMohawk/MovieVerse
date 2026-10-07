@@ -46,29 +46,30 @@ func (q *Queries) AddGenreToMovie(ctx context.Context, arg AddGenreToMovieParams
 
 const createComment = `-- name: CreateComment :one
 
-INSERT INTO comments (movie_id, profile_id, content)
+INSERT INTO comments (movie_id, user_id, text)
 VALUES ($1, $2, $3)
-RETURNING id, movie_id, profile_id, content, created_at
+RETURNING id, movie_id, user_id, text, created_at, updated_at
 `
 
 type CreateCommentParams struct {
-	MovieID   int64
-	ProfileID int64
-	Content   string
+	MovieID int64
+	UserID  int64
+	Text    string
 }
 
 // ============================================================================
 // COMMENTS
 // ============================================================================
 func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
-	row := q.db.QueryRow(ctx, createComment, arg.MovieID, arg.ProfileID, arg.Content)
+	row := q.db.QueryRow(ctx, createComment, arg.MovieID, arg.UserID, arg.Text)
 	var i Comment
 	err := row.Scan(
 		&i.ID,
 		&i.MovieID,
-		&i.ProfileID,
-		&i.Content,
+		&i.UserID,
+		&i.Text,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -156,6 +157,41 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		&i.AvatarUrl,
 		&i.Bio,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteComment = `-- name: DeleteComment :exec
+DELETE FROM comments
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteCommentParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) error {
+	_, err := q.db.Exec(ctx, deleteComment, arg.ID, arg.UserID)
+	return err
+}
+
+const getCommentByID = `-- name: GetCommentByID :one
+SELECT id, movie_id, user_id, text, created_at, updated_at
+FROM comments
+WHERE id = $1
+`
+
+func (q *Queries) GetCommentByID(ctx context.Context, id int64) (Comment, error) {
+	row := q.db.QueryRow(ctx, getCommentByID, id)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.MovieID,
+		&i.UserID,
+		&i.Text,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -288,66 +324,6 @@ func (q *Queries) IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, e
 	return exists, err
 }
 
-const listCommentsByMovieID = `-- name: ListCommentsByMovieID :many
-SELECT
-    c.id,
-    c.movie_id,
-    c.profile_id,
-    c.content,
-    c.created_at,
-    p.username,
-    p.avatar_url
-FROM comments c
-         JOIN profiles p ON c.profile_id = p.id
-WHERE c.movie_id = $1
-ORDER BY c.created_at DESC
-LIMIT $3 OFFSET $2
-`
-
-type ListCommentsByMovieIDParams struct {
-	MovieID int64
-	Offset  int32
-	Limit   int32
-}
-
-type ListCommentsByMovieIDRow struct {
-	ID        int64
-	MovieID   int64
-	ProfileID int64
-	Content   string
-	CreatedAt time.Time
-	Username  string
-	AvatarUrl *string
-}
-
-func (q *Queries) ListCommentsByMovieID(ctx context.Context, arg ListCommentsByMovieIDParams) ([]ListCommentsByMovieIDRow, error) {
-	rows, err := q.db.Query(ctx, listCommentsByMovieID, arg.MovieID, arg.Offset, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListCommentsByMovieIDRow
-	for rows.Next() {
-		var i ListCommentsByMovieIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.MovieID,
-			&i.ProfileID,
-			&i.Content,
-			&i.CreatedAt,
-			&i.Username,
-			&i.AvatarUrl,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listFavorites = `-- name: ListFavorites :many
 SELECT
     m.id,
@@ -406,6 +382,47 @@ func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([
 			&i.AverageRating,
 			&i.ViewsCount,
 			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovieComments = `-- name: ListMovieComments :many
+SELECT id, movie_id, user_id, text, created_at, updated_at
+FROM comments
+WHERE movie_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListMovieCommentsParams struct {
+	MovieID int64
+	Limit   int32
+	Offset  int32
+}
+
+func (q *Queries) ListMovieComments(ctx context.Context, arg ListMovieCommentsParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listMovieComments, arg.MovieID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Comment
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.UserID,
+			&i.Text,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
