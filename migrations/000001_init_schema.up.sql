@@ -41,13 +41,6 @@ CREATE TABLE IF NOT EXISTS ratings (
                          UNIQUE(movie_id, profile_id)
 );
 
-CREATE TABLE IF NOT EXISTS comments (
-                          id BIGSERIAL PRIMARY KEY,
-                          movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
-                          profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-                          content TEXT NOT NULL,
-                          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 CREATE TABLE IF NOT EXISTS user_favorites (
                                               user_id BIGINT NOT NULL,
                                               movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
@@ -56,3 +49,15 @@ CREATE TABLE IF NOT EXISTS user_favorites (
 );
 CREATE INDEX IF NOT EXISTS idx_user_favorites_user_created
     ON user_favorites (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS comments (
+                                        id BIGSERIAL PRIMARY KEY,
+                                        movie_id BIGINT NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+                                        user_id BIGINT NOT NULL,
+                                        text TEXT NOT NULL,
+                                        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_movie_created
+    ON comments (movie_id, created_at DESC);
