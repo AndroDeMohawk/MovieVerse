@@ -4,6 +4,9 @@ grpc:
   port: 45045
   timeout: 5s
 
+http:
+  port: 8085
+
 postgres:
   host: "localhost"
   port: 1291
