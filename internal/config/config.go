@@ -15,11 +15,16 @@ type Config struct {
 	Redis       RedisConfig       `yaml:"redis"`
 	Kafka       KafkaConfig       `yaml:"kafka"`
 	AuthService AuthServiceConfig `yaml:"auth_service"`
+	HTTP        HTTPConfig        `yaml:"http"`
 }
 
 type GRPCConfig struct {
 	Port    int           `yaml:"port" env-default:"44044"`
 	Timeout time.Duration `yaml:"timeout" env-default:"5s"`
+}
+
+type HTTPConfig struct {
+	Port int `yaml:"port" env-default:"8085"`
 }
 
 type PostgresConfig struct {
