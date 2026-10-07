@@ -132,25 +132,25 @@ ON CONFLICT (movie_id, profile_id)
 -- ============================================================================
 
 -- name: CreateComment :one
-INSERT INTO comments (movie_id, profile_id, content)
-VALUES (sqlc.arg('movie_id'), sqlc.arg('profile_id'), sqlc.arg('content'))
-RETURNING id, movie_id, profile_id, content, created_at;
+INSERT INTO comments (movie_id, user_id, text)
+VALUES ($1, $2, $3)
+RETURNING id, movie_id, user_id, text, created_at, updated_at;
 
--- name: ListCommentsByMovieID :many
-SELECT
-    c.id,
-    c.movie_id,
-    c.profile_id,
-    c.content,
-    c.created_at,
-    p.username,
-    p.avatar_url
-FROM comments c
-         JOIN profiles p ON c.profile_id = p.id
-WHERE c.movie_id = sqlc.arg('movie_id')
-ORDER BY c.created_at DESC
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+-- name: DeleteComment :exec
+DELETE FROM comments
+WHERE id = $1 AND user_id = $2;
 
+-- name: ListMovieComments :many
+SELECT id, movie_id, user_id, text, created_at, updated_at
+FROM comments
+WHERE movie_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: GetCommentByID :one
+SELECT id, movie_id, user_id, text, created_at, updated_at
+FROM comments
+WHERE id = $1;
 
 -- name: AddFavorite :exec
 INSERT INTO user_favorites (user_id, movie_id)
@@ -185,3 +185,4 @@ SELECT EXISTS (
     FROM user_favorites
     WHERE user_id = $1 AND movie_id = $2
 );
+
