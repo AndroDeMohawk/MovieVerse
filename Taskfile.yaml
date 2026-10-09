@@ -12,6 +12,10 @@ tasks:
     desc: "Генерация Go-кода из SQL файлов"
     cmds:
       - sqlc generate
+  seed:
+    desc: "Заполняет таблицы для тестирования"
+    cmds:
+      - docker exec -i movie_postgres psql -U postgres -d movie_db < scripts/seed.sql
   migrate-up:
     desc: Накатить все миграции
     cmds:
