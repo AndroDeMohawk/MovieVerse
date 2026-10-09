@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,7 +17,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const movieCacheTTL = 15 * time.Minute
 const pendingKey = "movie:views:pending"
 
 var (
@@ -37,19 +35,32 @@ type CreateMovieInput struct {
 	GenreIDs        []int32
 }
 
+type MovieRepository interface {
+	GetMovieByID(ctx context.Context, id int64) (db.GetMovieByIDRow, error)
+}
+
 type Movie struct {
+	repo       MovieRepository
+	rdb        *redis.Client
 	q          *db.Queries
 	pool       *pgxpool.Pool
-	rdb        *redis.Client
 	authClient *auth.Client
 	log        *slog.Logger
 }
 
-func NewMovie(q *db.Queries, pool *pgxpool.Pool, rdb *redis.Client, authClient *auth.Client, log *slog.Logger) *Movie {
+func NewMovie(
+	repo MovieRepository,
+	rdb *redis.Client,
+	q *db.Queries,
+	pool *pgxpool.Pool,
+	authClient *auth.Client,
+	log *slog.Logger,
+) *Movie {
 	return &Movie{
+		repo:       repo,
+		rdb:        rdb,
 		q:          q,
 		pool:       pool,
-		rdb:        rdb,
 		authClient: authClient,
 		log:        log,
 	}
@@ -109,25 +120,9 @@ func (u *Movie) CreateMovie(ctx context.Context, userID int64, input CreateMovie
 
 func (u *Movie) GetMovie(ctx context.Context, id int64) (db.GetMovieByIDRow, error) {
 	const op = "usecase.movie.GetMovie"
-	cacheKey := fmt.Sprintf("movie:%d", id)
 
-	// 1. Пробуем получить из Redis (Cache Hit)
-	cachedBytes, err := u.rdb.Get(ctx, cacheKey).Bytes()
-	if err == nil {
-		var movie db.GetMovieByIDRow
-		if err := json.Unmarshal(cachedBytes, &movie); err == nil {
-			u.log.Debug("cache hit", slog.Int64("movie_id", id))
-
-			// Асинхронно инкрементируем просмотры
-			u.incrementViews(id)
-
-			return movie, nil
-		}
-	} else if !errors.Is(err, redis.Nil) {
-		// Ошибка Redis (например, таймаут соединения) — логируем и идем в БД
-		u.log.Warn("redis get error, falling back to postgres", slog.Any("error", err))
-	}
-	movie, err := u.q.GetMovieByID(ctx, id)
+	// 1. Кэширование полностью прозрачно выполняется внутри u.repo (CachedMovieRepository)
+	movie, err := u.repo.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.GetMovieByIDRow{}, ErrMovieNotFound
@@ -135,18 +130,12 @@ func (u *Movie) GetMovie(ctx context.Context, id int64) (db.GetMovieByIDRow, err
 		return db.GetMovieByIDRow{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	bytes, err := json.Marshal(movie)
-	if err == nil {
-		if setErr := u.rdb.Set(ctx, cacheKey, bytes, movieCacheTTL).Err(); setErr != nil {
-			u.log.Warn("failed to set movie cache", slog.Any("error", setErr))
-		}
-	}
-
-	// Асинхронно инкрементируем просмотры
+	// 2. Асинхронно инкрементируем счетчик просмотров в Redis
 	go u.incrementViews(id)
 
 	return movie, nil
 }
+
 func (u *Movie) incrementViews(movieID int64) {
 	ctx := context.Background()
 	viewsKey := fmt.Sprintf("movie:views:%d", movieID)
@@ -245,7 +234,6 @@ func (u *Movie) workerFlushMovieViews(ctx context.Context, idStr string) {
 	delta, err := u.rdb.GetDel(ctx, viewsKey).Int64()
 	if err != nil {
 		if err == redis.Nil {
-
 			u.rdb.SRem(ctx, pendingKey, idStr)
 			return
 		}
@@ -260,7 +248,6 @@ func (u *Movie) workerFlushMovieViews(ctx context.Context, idStr string) {
 
 	if err := u.rdb.SRem(ctx, pendingKey, idStr).Err(); err != nil {
 		u.log.Error("failed to remove from pending", slog.Int64("movie_id", movieID), slog.Any("error", err))
-
 	}
 
 	err = u.q.IncrementMovieViewsBy(ctx, db.IncrementMovieViewsByParams{
