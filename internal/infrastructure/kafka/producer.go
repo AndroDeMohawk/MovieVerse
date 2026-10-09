@@ -15,8 +15,9 @@ type Producer struct {
 
 func NewProducer(brokers []string, log *slog.Logger) *Producer {
 	writer := &kafka.Writer{
-		Addr:     kafka.TCP(brokers...),
-		Balancer: &kafka.LeastBytes{},
+		Addr:                   kafka.TCP(brokers...),
+		Balancer:               &kafka.LeastBytes{},
+		AllowAutoTopicCreation: true,
 	}
 
 	return &Producer{

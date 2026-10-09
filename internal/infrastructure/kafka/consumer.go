@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -22,11 +23,13 @@ type Consumer struct {
 
 func NewConsumer(brokers []string, groupID, topic string, broadcaster EventBroadcaster, log *slog.Logger) *Consumer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  brokers,
-		GroupID:  groupID,
-		Topic:    topic,
-		MinBytes: 10,   // 10KB
-		MaxBytes: 10e6, // 10MB
+		Brokers:     brokers,
+		GroupID:     groupID,
+		Topic:       topic,
+		MinBytes:    1,
+		MaxBytes:    10e6,
+		MaxWait:     100 * time.Millisecond,
+		StartOffset: kafka.FirstOffset,
 	})
 
 	return &Consumer{
