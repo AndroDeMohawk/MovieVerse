@@ -15,6 +15,7 @@ import (
 	"github.com/AndroDeMohawk/MovieVerse/internal/config"
 	"github.com/AndroDeMohawk/MovieVerse/internal/infrastructure/kafka"
 	"github.com/AndroDeMohawk/MovieVerse/internal/infrastructure/redis"
+	"github.com/AndroDeMohawk/MovieVerse/internal/repository"
 	"github.com/AndroDeMohawk/MovieVerse/internal/repository/postgres"
 	db "github.com/AndroDeMohawk/MovieVerse/internal/repository/sqlc"
 	commentgrpc "github.com/AndroDeMohawk/MovieVerse/internal/transport/grpc/comment"
@@ -80,7 +81,9 @@ func main() {
 
 	kafkaProducer := kafka.NewProducer(cfg.Kafka.Brokers, log)
 	defer kafkaProducer.Close()
-
+	if err := kafka.EnsureTopicExists(cfg.Kafka.Brokers[0], cfg.Kafka.CommentsTopic); err != nil {
+		log.Warn("failed to ensure topic exists", slog.String("error", err.Error()))
+	}
 	kafkaConsumer := kafka.NewConsumer(
 		cfg.Kafka.Brokers,
 		"movie-comments-group",
@@ -90,9 +93,11 @@ func main() {
 	)
 	kafkaConsumer.Start(appCtx)
 	defer kafkaConsumer.Close()
-
+	// Repositories
+	pgRepo := db.New(dbPool)
+	cachedRepo := repository.NewCachedMovieRepository(pgRepo, rdb, log)
 	//5.Usecases
-	movieUsecase := usecase.NewMovie(queries, dbPool, rdb, authClient, log)
+	movieUsecase := usecase.NewMovie(cachedRepo, rdb, queries, dbPool, authClient, log)
 	profileUsecase := usecase.NewProfile(queries, dbPool, log)
 	commentUsecase := usecase.NewComment(
 		queries,
