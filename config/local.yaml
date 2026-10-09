@@ -22,7 +22,7 @@ redis:
 
 kafka:
   brokers:
-    - "localhost:9092"
+    - "127.0.0.1:9090"
   comments_topic: "movie-comments"
 
 auth_service:
