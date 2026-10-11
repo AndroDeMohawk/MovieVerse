@@ -25,7 +25,6 @@ func NewServer(port string, wsHub *ws.Hub, log *slog.Logger) *Server {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
-
 	// Register WebSocket route
 	router.Get("/ws/movies/{id}", func(w http.ResponseWriter, r *http.Request) {
 		ws.ServeWS(wsHub, w, r)
