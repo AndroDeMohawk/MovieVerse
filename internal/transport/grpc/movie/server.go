@@ -47,7 +47,7 @@ func (s *serverAPI) CreateMovie(
 		ReleaseDate:     unixToTimePtr(req.GetReleaseDate()),
 		DurationMinutes: int32Ptr(req.GetDurationMinutes()),
 		PosterURL:       stringPtr(req.GetPosterUrl()),
-		GenreIDs:        req.GetGenreIds(),
+		GenreIDs:        int32array(req.GetGenreIds()),
 	}
 
 	movieID, err := s.movieUsecase.CreateMovie(ctx, userID, input)
@@ -109,6 +109,29 @@ func (s *serverAPI) ListMovies(
 		Movies: protoMovies,
 	}, nil
 }
+func (s *serverAPI) SearchMovies(
+	ctx context.Context,
+	req *moviev1.SearchMoviesRequest,
+) (*moviev1.SearchMoviesResponse, error) {
+	query := req.GetQuery()
+	if query == "" {
+		return nil, status.Error(codes.InvalidArgument, "query is required")
+	}
+
+	movies, err := s.movieUsecase.SearchMovies(ctx, query, req.GetPage(), req.GetLimit(), req.GetGenreIds())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to search movies")
+	}
+
+	protoMovies := make([]*moviev1.Movie, 0, len(movies))
+	for _, m := range movies {
+		protoMovies = append(protoMovies, mapSearchMoviesRowToProto(m))
+	}
+
+	return &moviev1.SearchMoviesResponse{
+		Movies: protoMovies,
+	}, nil
+}
 
 //============================================================================
 //MAPPERS & HELPERS
@@ -145,7 +168,21 @@ func mapListMoviesRowToProto(m db.ListMoviesRow) *moviev1.Movie {
 		CreatedAt:       m.CreatedAt.Unix(),
 	}
 }
-
+func mapSearchMoviesRowToProto(m db.SearchMoviesRow) *moviev1.Movie {
+	return &moviev1.Movie{
+		Id:              m.ID,
+		Title:           m.Title,
+		OriginalTitle:   derefStr(m.OriginalTitle),
+		Description:     derefStr(m.Description),
+		Director:        derefStr(m.Director),
+		DurationMinutes: derefInt32(m.DurationMinutes),
+		PosterUrl:       derefStr(m.PosterUrl),
+		AverageRating:   m.AverageRating,
+		ViewsCount:      m.ViewsCount,
+		Genres:          m.Genres,
+		CreatedAt:       m.CreatedAt.Unix(),
+	}
+}
 func stringPtr(s string) *string {
 	if s == "" {
 		return nil
@@ -180,4 +217,11 @@ func derefInt32(i *int32) int32 {
 		return 0
 	}
 	return *i
+}
+func int32array(a []int64) []int32 {
+	b := make([]int32, len(a), cap(a))
+	for i, v := range a {
+		b[i] = int32(v)
+	}
+	return b
 }

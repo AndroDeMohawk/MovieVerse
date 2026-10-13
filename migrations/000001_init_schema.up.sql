@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS movies (
                         views_count BIGINT NOT NULL DEFAULT 0,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX movies_search_idx ON movies USING gin(to_tsvector('simple', title || ' ' || coalesce(description, '') || ' ' || coalesce(director, '')));
 
 CREATE TABLE IF NOT EXISTS genres (
                         id SERIAL PRIMARY KEY,

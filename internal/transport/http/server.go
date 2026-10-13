@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	mw "github.com/AndroDeMohawk/MovieVerse/internal/transport/http/middleware"
 	"github.com/AndroDeMohawk/MovieVerse/internal/transport/ws"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
@@ -18,21 +20,24 @@ type Server struct {
 	log        *slog.Logger
 }
 
-func NewServer(port string, wsHub *ws.Hub, log *slog.Logger) *Server {
-	router := chi.NewRouter()
+func NewServer(port string, rdb *redis.Client, wsHub *ws.Hub, log *slog.Logger) *Server {
+	r := chi.NewRouter()
 
 	// Base middlewares
-	router.Use(middleware.RequestID)
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
-	// Register WebSocket route
-	router.Get("/ws/movies/{id}", func(w http.ResponseWriter, r *http.Request) {
-		ws.ServeWS(wsHub, w, r)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	r.Route("/ws", func(r chi.Router) {
+		r.Use(mw.RateLimiter(rdb, 10, time.Minute))
+		r.Get("/movies/{id}", func(w http.ResponseWriter, r *http.Request) {
+			ws.ServeWS(wsHub, w, r)
+		})
 	})
 
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      router,
+		Handler:      r,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

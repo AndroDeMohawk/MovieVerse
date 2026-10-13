@@ -110,7 +110,7 @@ func main() {
 	go movieUsecase.StartViewsSync(appCtx, 1*time.Minute)
 
 	//6.Transports Setup
-	httpServer := httptransport.NewServer(strconv.Itoa(cfg.HTTP.Port), wsHub, log)
+	httpServer := httptransport.NewServer(strconv.Itoa(cfg.HTTP.Port), rdb, wsHub, log)
 
 	gRPCServer := grpc.NewServer(
 		grpc.UnaryInterceptor(

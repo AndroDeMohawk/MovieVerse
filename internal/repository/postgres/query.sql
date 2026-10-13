@@ -117,6 +117,29 @@ SET average_rating = (
 )
 WHERE id = sqlc.arg('movie_id');
 
+-- name: SearchMovies :many
+SELECT
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
+    COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
+FROM movies m
+         LEFT JOIN movie_genres mg ON m.id = mg.movie_id
+         LEFT JOIN genres g ON mg.genre_id = g.id
+WHERE to_tsvector('simple', m.title || ' ' || COALESCE(m.description, '') || ' ' || COALESCE(m.director, '')) @@ plainto_tsquery('simple', sqlc.arg('query'))
+  AND (sqlc.narg('genre_ids')::INT[] IS NULL OR mg.genre_id = ANY(sqlc.narg('genre_ids')))
+GROUP BY m.id
+ORDER BY m.created_at DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
 -- ============================================================================
 -- RATINGS
 -- ============================================================================

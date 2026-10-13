@@ -526,6 +526,90 @@ func (q *Queries) RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) 
 	return err
 }
 
+const searchMovies = `-- name: SearchMovies :many
+SELECT
+    m.id,
+    m.title,
+    m.original_title,
+    m.description,
+    m.director,
+    m.release_date,
+    m.duration_minutes,
+    m.poster_url,
+    m.average_rating::float8 AS average_rating,
+    m.views_count,
+    m.created_at,
+    COALESCE(ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL), '{}')::TEXT[] AS genres
+FROM movies m
+         LEFT JOIN movie_genres mg ON m.id = mg.movie_id
+         LEFT JOIN genres g ON mg.genre_id = g.id
+WHERE to_tsvector('simple', m.title || ' ' || COALESCE(m.description, '') || ' ' || COALESCE(m.director, '')) @@ plainto_tsquery('simple', $1)
+  AND ($2::INT[] IS NULL OR mg.genre_id = ANY($2))
+GROUP BY m.id
+ORDER BY m.created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type SearchMoviesParams struct {
+	Query    string
+	GenreIds []int32
+	Offset   int32
+	Limit    int32
+}
+
+type SearchMoviesRow struct {
+	ID              int64
+	Title           string
+	OriginalTitle   *string
+	Description     *string
+	Director        *string
+	ReleaseDate     pgtype.Date
+	DurationMinutes *int32
+	PosterUrl       *string
+	AverageRating   float64
+	ViewsCount      int64
+	CreatedAt       time.Time
+	Genres          []string
+}
+
+func (q *Queries) SearchMovies(ctx context.Context, arg SearchMoviesParams) ([]SearchMoviesRow, error) {
+	rows, err := q.db.Query(ctx, searchMovies,
+		arg.Query,
+		arg.GenreIds,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchMoviesRow
+	for rows.Next() {
+		var i SearchMoviesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.OriginalTitle,
+			&i.Description,
+			&i.Director,
+			&i.ReleaseDate,
+			&i.DurationMinutes,
+			&i.PosterUrl,
+			&i.AverageRating,
+			&i.ViewsCount,
+			&i.CreatedAt,
+			&i.Genres,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMovieRating = `-- name: UpdateMovieRating :exec
 UPDATE movies
 SET average_rating = (

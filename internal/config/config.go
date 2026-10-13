@@ -38,7 +38,7 @@ type PostgresConfig struct {
 
 type RedisConfig struct {
 	Host     string `yaml:"host" env-default:"localhost"`
-	Port     int    `yaml:"port" env-default:"5555"`
+	Port     int    `yaml:"port" env-default:"6380"`
 	Password string `yaml:"password" env-default:""`
 }
 

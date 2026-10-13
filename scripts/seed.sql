@@ -2,13 +2,13 @@
 TRUNCATE TABLE comments, user_favorites, movies RESTART IDENTITY CASCADE;
 
 -- 1. Тестовые фильмы
-INSERT INTO movies (id, title, original_title, description, release_date, duration_minutes, poster_url, created_at)
+INSERT INTO movies (id, title,director, original_title, description, release_date, duration_minutes, poster_url, created_at, average_rating)
 VALUES
-    (1, 'Интерстеллар', 'Interstellar', 'Команда исследователей отправляется сквозь червоточину в поисках нового дома для человечества.', '2014-06-01', 169, 'https://images.example.com/interstellar.jpg', NOW() - INTERVAL '10 days'),
-    (2, 'Начало', 'Inception', 'Вор, извлекающий секреты из подсознания во время сна, получает шанс вернуть свою прежнюю жизнь.', '2010-06-01', 148, 'https://images.example.com/inception.jpg', NOW() - INTERVAL '9 days'),
-    (3, 'Темный рыцарь', 'The Dark Knight', 'Бэтмен с помощью полицмейстера и прокурора пытается очистить улики Готэма от преступности.', '2008-06-01', 152, 'https://images.example.com/dark_knight.jpg', NOW() - INTERVAL '8 days'),
-    (4, 'Матрица', 'The Matrix', 'Хакер Нео узнает от загадочных повстанцев правду о виртуальной реальности.', '1999-06-01', 136, 'https://images.example.com/matrix.jpg', NOW() - INTERVAL '7 days'),
-    (5, 'Побег из Шоушенка', 'The Shawshank Redemption', 'Бухгалтер Энди Дюфрейн обвинен в убийстве и приговорен к пожизненному заключению.', '1994-06-01', 142, 'https://images.example.com/shawshank.jpg', NOW() - INTERVAL '6 days');
+    (1, 'Интерстеллар', 'Кристофер Нолан','Interstellar', 'Команда исследователей отправляется сквозь червоточину в поисках нового дома для человечества.', '2014-06-01', 169, 'https://images.example.com/interstellar.jpg', NOW() - INTERVAL '10 days', 8.7),
+    (2, 'Начало', 'Кристофер Нолан','Inception', 'Вор, извлекающий секреты из подсознания во время сна, получает шанс вернуть свою прежнюю жизнь.', '2010-06-01', 148, 'https://images.example.com/inception.jpg', NOW() - INTERVAL '9 days', 8.6),
+    (3, 'Темный рыцарь','Кристофер Нолан' ,'The Dark Knight', 'Бэтмен с помощью полицмейстера и прокурора пытается очистить улики Готэма от преступности.', '2008-06-01', 152, 'https://images.example.com/dark_knight.jpg', NOW() - INTERVAL '8 days', 9.1),
+    (4, 'Матрица','Лана Вачовски', 'The Matrix', 'Хакер Нео узнает от загадочных повстанцев правду о виртуальной реальности.', '1999-06-01', 136, 'https://images.example.com/matrix.jpg', NOW() - INTERVAL '7 days', 7.9),
+    (5, 'Побег из Шоушенка','Фрэнк Дарабонт' ,'The Shawshank Redemption', 'Бухгалтер Энди Дюфрейн обвинен в убийстве и приговорен к пожизненному заключению.', '1994-06-01', 142, 'https://images.example.com/shawshank.jpg', NOW() - INTERVAL '6 days', 8.2);
 
 -- Синхронизируем счетчик автоинкремента, чтобы новые INSERT не конфликтовали с явными ID 1..5
 SELECT setval('movies_id_seq', (SELECT MAX(id) FROM movies));
@@ -33,3 +33,7 @@ VALUES
 
 -- Синхронизируем счетчик для комментариев
 SELECT setval('comments_id_seq', (SELECT MAX(id) FROM comments));
+
+INSERT INTO genres (name)
+VALUES
+('Боевик'),('Фантастика'),('Драма'),('Комедия')

@@ -233,7 +233,7 @@ func (u *Movie) workerFlushMovieViews(ctx context.Context, idStr string) {
 
 	delta, err := u.rdb.GetDel(ctx, viewsKey).Int64()
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			u.rdb.SRem(ctx, pendingKey, idStr)
 			return
 		}
@@ -279,3 +279,29 @@ func (u *Movie) workerFlushMovieViews(ctx context.Context, idStr string) {
 		u.log.Error("failed to invalidate movie cache", slog.Int64("movie_id", movieID), slog.Any("error", err))
 	}
 }
+func (u *Movie) SearchMovies(ctx context.Context, query string, page, limit int32, genreIDs []int32) ([]db.SearchMoviesRow, error) {
+	const op = "usecase.movie.SearchMovies"
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	movies, err := u.q.SearchMovies(ctx, db.SearchMoviesParams{
+		Query:    query,
+		GenreIds: genreIDs,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return movies, nil
+}
+
+//TODO: пофиксить dirty migrations + usecases
