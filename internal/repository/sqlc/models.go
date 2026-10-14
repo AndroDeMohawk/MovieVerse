@@ -29,7 +29,7 @@ type Movie struct {
 	Title           string
 	OriginalTitle   *string
 	Description     *string
-	Director        *string
+	Director        string
 	ReleaseDate     pgtype.Date
 	DurationMinutes *int32
 	PosterUrl       *string

@@ -223,7 +223,7 @@ type GetMovieByIDRow struct {
 	Title           string
 	OriginalTitle   *string
 	Description     *string
-	Director        *string
+	Director        string
 	ReleaseDate     pgtype.Date
 	DurationMinutes *int32
 	PosterUrl       *string
@@ -468,7 +468,7 @@ type ListMoviesRow struct {
 	Title           string
 	OriginalTitle   *string
 	Description     *string
-	Director        *string
+	Director        string
 	ReleaseDate     pgtype.Date
 	DurationMinutes *int32
 	PosterUrl       *string
@@ -562,7 +562,7 @@ type SearchMoviesRow struct {
 	Title           string
 	OriginalTitle   *string
 	Description     *string
-	Director        *string
+	Director        string
 	ReleaseDate     pgtype.Date
 	DurationMinutes *int32
 	PosterUrl       *string

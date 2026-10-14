@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS movies (
                         title VARCHAR(255) NOT NULL,
                         original_title VARCHAR(255),
                         description TEXT,
-                        director VARCHAR(150),
+                        director VARCHAR(150) NOT NULL ,
                         release_date DATE,
                         duration_minutes INT,
                         poster_url VARCHAR(255),
