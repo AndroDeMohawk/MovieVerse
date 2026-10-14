@@ -4,33 +4,18 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	db "github.com/AndroDeMohawk/MovieVerse/internal/repository/sqlc"
 	"github.com/AndroDeMohawk/MovieVerse/internal/usecase"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// 1. Создаем мок для репозитория фильмов
 type MockMovieRepository struct {
 	mock.Mock
-}
-
-func (m *MockMovieRepository) SearchMovies(ctx context.Context, query string, genreIDs []int32, limit, offset int32) ([]db.Movie, int64, error) {
-	args := m.Called(ctx, query, genreIDs, limit, offset)
-
-	var movies []db.Movie
-	if args.Get(0) != nil {
-		movies = args.Get(0).([]db.Movie)
-	}
-
-	return movies, args.Get(1).(int64), args.Error(2)
-}
-
-func (m *MockMovieRepository) CreateMovie(ctx context.Context, input db.CreateMovieParams, userID int64) (int64, error) {
-	args := m.Called(ctx, input, userID)
-	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockMovieRepository) GetMovieByID(ctx context.Context, movieID int64) (db.GetMovieByIDRow, error) {
@@ -42,63 +27,108 @@ func (m *MockMovieRepository) GetMovieByID(ctx context.Context, movieID int64) (
 	return row, args.Error(1)
 }
 
-// 2. Тестируем UseCase поиска
+type MockMovieQueries struct {
+	mock.Mock
+}
+
+func (m *MockMovieQueries) CreateMovie(ctx context.Context, arg db.CreateMovieParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockMovieQueries) AddGenreToMovie(ctx context.Context, arg db.AddGenreToMovieParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *MockMovieQueries) ListMovies(ctx context.Context, arg db.ListMoviesParams) ([]db.ListMoviesRow, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.ListMoviesRow), args.Error(1)
+}
+
+func (m *MockMovieQueries) SearchMovies(ctx context.Context, arg db.SearchMoviesParams) ([]db.SearchMoviesRow, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.SearchMoviesRow), args.Error(1)
+}
+
+func (m *MockMovieQueries) IncrementMovieViewsBy(ctx context.Context, arg db.IncrementMovieViewsByParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
 func TestMovieUsecase_SearchMovies(t *testing.T) {
 	t.Run("success search with genres and pagination", func(t *testing.T) {
-		// Arrange (Подготовка)
 		mockRepo := new(MockMovieRepository)
+		mockQueries := new(MockMovieQueries)
 
-		expectedMovies := []db.Movie{
-			{ID: 1, Title: "Довод", Director: "Кристофер Нолан"},
+		expectedMovies := []db.SearchMoviesRow{
+			{
+				ID:            1,
+				Title:         "Довод",
+				Director:      "Кристофер Нолан",
+				ReleaseDate:   pgtype.Date{Time: time.Date(2020, 8, 26, 0, 0, 0, 0, time.UTC), Valid: true},
+				AverageRating: 8.5,
+				ViewsCount:    1200,
+				CreatedAt:     time.Date(2020, 8, 27, 10, 0, 0, 0, time.UTC),
+				Genres:        []string{"Sci-Fi", "Thriller"},
+			},
 		}
-		expectedTotal := int64(1)
 
 		query := "Нолан"
 		genreIDs := []int32{1, 2}
 		page := int32(1)
 		limit := int32(10)
-		expectedOffset := int32(0) // (page - 1) * limit
 
-		// Ожидаем вызов метода репозитория с конкретными аргументами
-		mockRepo.On("SearchMovies", mock.Anything, query, genreIDs, limit, expectedOffset).
-			Return(expectedMovies, expectedTotal, nil)
+		mockQueries.On("SearchMovies", mock.Anything, db.SearchMoviesParams{
+			Query:    query,
+			GenreIds: genreIDs,
+			Limit:    limit,
+			Offset:   0,
+		}).Return(expectedMovies, nil)
 
-		uc := usecase.NewMovie(mockRepo, nil, nil, nil, nil, nil)
+		uc := usecase.NewMovie(mockRepo, nil, mockQueries, nil, nil, nil)
 
-		// Act (Выполнение)
 		movies, err := uc.SearchMovies(context.Background(), query, page, limit, genreIDs)
 
-		// Assert (Проверки)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedMovies, movies)
 
-		// Проверяем, что все замоканные вызовы реально произошли
+		mockQueries.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("repository error handling", func(t *testing.T) {
-		// Arrange
 		mockRepo := new(MockMovieRepository)
+		mockQueries := new(MockMovieQueries)
 
 		query := "test"
 		genreIDs := []int32{}
 		page := int32(1)
 		limit := int32(10)
-		expectedOffset := int32(0)
 
-		mockRepo.On("SearchMovies", mock.Anything, query, genreIDs, limit, expectedOffset).
-			Return(nil, int64(0), errors.New("database failure"))
+		mockQueries.On("SearchMovies", mock.Anything, db.SearchMoviesParams{
+			Query:    query,
+			GenreIds: genreIDs,
+			Limit:    limit,
+			Offset:   0,
+		}).Return(nil, errors.New("database failure"))
 
-		uc := usecase.NewMovie(mockRepo, nil, nil, nil, nil, nil)
+		uc := usecase.NewMovie(mockRepo, nil, mockQueries, nil, nil, nil)
 
-		// Act
 		movies, err := uc.SearchMovies(context.Background(), query, page, limit, genreIDs)
 
-		// Assert
 		assert.Error(t, err)
 		assert.Nil(t, movies)
-		assert.Equal(t, "database failure", err.Error())
+		assert.ErrorContains(t, err, "database failure")
+		assert.ErrorContains(t, err, "usecase.movie.SearchMovies")
 
+		mockQueries.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
 }

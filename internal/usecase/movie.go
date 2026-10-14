@@ -39,10 +39,18 @@ type MovieRepository interface {
 	GetMovieByID(ctx context.Context, id int64) (db.GetMovieByIDRow, error)
 }
 
+type MovieQueries interface {
+	CreateMovie(ctx context.Context, arg db.CreateMovieParams) (int64, error)
+	AddGenreToMovie(ctx context.Context, arg db.AddGenreToMovieParams) error
+	ListMovies(ctx context.Context, arg db.ListMoviesParams) ([]db.ListMoviesRow, error)
+	SearchMovies(ctx context.Context, arg db.SearchMoviesParams) ([]db.SearchMoviesRow, error)
+	IncrementMovieViewsBy(ctx context.Context, arg db.IncrementMovieViewsByParams) error
+}
+
 type Movie struct {
 	repo       MovieRepository
 	rdb        *redis.Client
-	q          *db.Queries
+	q          MovieQueries
 	pool       *pgxpool.Pool
 	authClient *auth.Client
 	log        *slog.Logger
@@ -51,7 +59,7 @@ type Movie struct {
 func NewMovie(
 	repo MovieRepository,
 	rdb *redis.Client,
-	q *db.Queries,
+	q MovieQueries,
 	pool *pgxpool.Pool,
 	authClient *auth.Client,
 	log *slog.Logger,
@@ -83,7 +91,7 @@ func (u *Movie) CreateMovie(ctx context.Context, userID int64, input CreateMovie
 	}
 	defer tx.Rollback(ctx)
 
-	qtx := u.q.WithTx(tx)
+	qtx := db.New(tx)
 
 	movieID, err := qtx.CreateMovie(ctx, db.CreateMovieParams{
 		Title:         input.Title,
